@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aura — Your Thinking Companion</title>
+  <meta name="description" content="Aura is a warm, thoughtful AI companion powered by Gemini. Start a conversation and think out loud." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />
+  
+  <!-- Markdown & Highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <style>
+    /* ─── Design Tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:          #F7F5F2;
+      --surface:     #FFFFFF;
+      --accent:      #1C1C2E;
+      --accent-mid:  #2e2e48;
+      --accent-glow: rgba(28,28,46,0.12);
+      --muted:       #8A8A99;
+      --border:      #E8E5E0;
+      --danger:      #c0392b;
+      --danger-bg:   #fdf0ee;
+      --radius-bubble: 20px;
+      --radius-card:   24px;
+      --font-heading: 'DM Serif Display', serif;
+      --font-body:    'DM Sans', sans-serif;
+      --shadow-soft:  0 4px 20px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.02);
+      --shadow-card:  0 12px 48px rgba(28,28,46,0.08), 0 4px 12px rgba(28,28,46,0.04);
+      --transition:   300ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ─── Reset ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--accent);
+      -webkit-font-smoothing: antialiased;
+    }
+
+
+
+    /* ═══════════════════════════════════════════════════════════════
+       CHAT SHELL
+    ═══════════════════════════════════════════════════════════════ */
+    #chat-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 720px;
+      margin: 0 auto;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    /* ─── Header ─────────────────────────────────────────────────── */
+    #chat-header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .avatar {
+      width: 42px; height: 42px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+    .avatar span {
+      font-family: var(--font-heading);
+      font-size: 17px;
+      color: #fff;
+      line-height: 1;
+      letter-spacing: -0.5px;
+    }
+
+    .header-info { flex: 1; }
+    .header-info .bot-name {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      color: var(--accent);
+      line-height: 1.1;
+    }
+    .header-info .bot-tagline {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 1px;
+      font-weight: 400;
+    }
+
+    .header-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #4caf7d; font-weight: 500;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      background: #4caf7d;
+      border-radius: 50%;
+      animation: pulse-green 2.4s ease-in-out infinite;
+    }
+
+    /* ─── Chat Body ──────────────────────────────────────────────── */
+    #chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      scroll-behavior: smooth;
+    }
+    #chat-body::-webkit-scrollbar { width: 4px; }
+    #chat-body::-webkit-scrollbar-track { background: transparent; }
+    #chat-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 100px; }
+
+    /* ─── Message Bubbles ────────────────────────────────────────── */
+    .msg-wrap {
+      display: flex;
+      flex-direction: column;
+      max-width: 78%;
+      gap: 4px;
+    }
+    .msg-wrap.user { align-self: flex-end; align-items: flex-end; }
+    .msg-wrap.bot  { align-self: flex-start; align-items: flex-start; }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius-bubble);
+      font-size: 15px;
+      line-height: 1.6;
+      word-break: break-word;
+      white-space: pre-wrap;
+      position: relative;
+    }
+
+    .msg-wrap.bot .bubble {
+      background: var(--surface);
+      color: var(--accent);
+      box-shadow: var(--shadow-soft);
+      border-bottom-left-radius: 4px;
+      animation: slideInLeft 200ms ease-out both;
+    }
+    .msg-wrap.user .bubble {
+      background: var(--accent);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+      animation: slideInRight 200ms ease-out both;
+    }
+    .msg-wrap.bot .bubble.error-bubble {
+      background: var(--danger-bg);
+      color: var(--danger);
+      box-shadow: none;
+      border: 1px solid #f5c6c2;
+    }
+
+    .timestamp {
+      font-size: 10px;
+      color: var(--muted);
+      padding: 0 4px;
+      font-family: var(--font-body);
+      font-weight: 400;
+    }
+
+    /* ─── Typing Indicator ───────────────────────────────────────── */
+    #typing-indicator {
+      display: none;
+      align-self: flex-start;
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 4px;
+      max-width: 78%;
+    }
+    #typing-indicator.visible { display: flex; }
+
+    .typing-bubble {
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      border-radius: var(--radius-bubble);
+      border-bottom-left-radius: 4px;
+      padding: 14px 18px;
+      display: flex; gap: 5px; align-items: center;
+      animation: slideInLeft 200ms ease-out both;
+    }
+    .dot {
+      width: 7px; height: 7px;
+      background: var(--muted);
+      border-radius: 50%;
+      animation: typingPulse 1.2s ease-in-out infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 150ms; }
+    .dot:nth-child(3) { animation-delay: 300ms; }
+
+    /* ─── Input Bar ──────────────────────────────────────────────── */
+    #input-area {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 20px 10px;
+    }
+
+    .input-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 10px 10px 10px 16px;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .input-row:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    #user-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-family: var(--font-body);
+      font-size: 15px;
+      color: var(--accent);
+      resize: none;
+      outline: none;
+      max-height: 96px; /* ~4 lines */
+      min-height: 24px;
+      line-height: 1.6;
+      overflow-y: auto;
+    }
+    #user-input::placeholder { color: var(--muted); transition: opacity 0.3s; }
+    #user-input::-webkit-scrollbar { width: 0; }
+
+    #send-btn {
+      width: 38px; height: 38px; flex-shrink: 0;
+      background: var(--accent);
+      border: none; border-radius: 50%;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition), transform var(--transition), opacity var(--transition);
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+    #send-btn:hover:not(:disabled) { background: var(--accent-mid); transform: scale(1.05); }
+    #send-btn:disabled { opacity: 0.35; cursor: default; transform: none; }
+    #send-btn svg { color: #fff; }
+
+    .input-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 8px;
+      user-select: none;
+      letter-spacing: 0.2px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       ANIMATIONS
+    ═══════════════════════════════════════════════════════════════ */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-14px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(14px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes typingPulse {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30%           { transform: translateY(-5px); opacity: 1; }
+    }
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ─── Markdown Styles ───────────────────────────────────────── */
+    .bubble p { margin-bottom: 0.8em; }
+    .bubble p:last-child { margin-bottom: 0; }
+    .bubble ul, .bubble ol { margin-left: 1.5em; margin-bottom: 0.8em; }
+    .bubble code {
+      font-family: 'Fira Code', 'Courier New', monospace;
+      background: rgba(0,0,0,0.05);
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .msg-wrap.user .bubble code { background: rgba(255,255,255,0.2); }
+    .bubble pre {
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+    .bubble pre code {
+      background: transparent;
+      padding: 0;
+      display: block;
+      color: inherit;
+    }
+    .msg-wrap.user .bubble pre { background: rgba(0,0,0,0.2); border: none; }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════
+       CHAT SHELL
+  ════════════════════════════════════════════════ -->
+  <div id="chat-shell" class="visible">
+
+    <!-- Header -->
+    <header id="chat-header">
+      <div class="avatar"><span>Au</span></div>
+      <div class="header-info">
+        <div class="bot-name">Aura</div>
+        <div class="bot-tagline">Your thinking companion</div>
+      </div>
+      <div class="header-status">
+        <span class="status-dot"></span>
+        Online
+      </div>
+    </header>
+
+    <!-- Chat Body -->
+    <main id="chat-body">
+      <!-- Messages injected here -->
+      <div id="typing-indicator">
+        <div class="typing-bubble">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+        <span class="timestamp">Aura is gathering thoughts…</span>
+      </div>
+    </main>
+
+    <!-- Input Area -->
+    <div id="input-area">
+      <div class="input-row">
+        <textarea
+          id="user-input"
+          rows="1"
+          placeholder="Ask me anything..."
+          aria-label="Message Aura"
+          spellcheck="true"
+        ></textarea>
+        <button id="send-btn" disabled title="Send message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+      <p class="input-hint">↵ Send &nbsp;·&nbsp; Shift+↵ New line</p>
+    </div>
+
+  </div>
+
+  <script>
+  /* Version: 1.0.2 - Cache buster */
+  (() => {
+    'use strict';
+
+    /* ─── Constants ─────────────────────────────────────────── */
+    const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+    const API_KEY  = 'AIzaSyAVGXgz2NyP1BsGr6w272icDz1hngNgaSg';
+    const SYSTEM_INSTRUCTION = `You are Aura, a calm, warm, and thoughtful conversational companion. You speak naturally — like a knowledgeable friend, not a formal assistant. Keep responses concise unless depth is truly needed. Use Markdown for structure (bold, lists, code blocks) when appropriate. Avoid starting responses with "Certainly!" or "Of course!" or similar filler phrases.`;
+    const TYPEWRITER_INTERVAL = 12; // ms per character (slightly faster for markdown flow)
+    const ONBOARDING_DELAY = 600;   // ms before welcome message
+
+    const PLACEHOLDER_PHRASES = [
+      'Ask me anything...',
+      "What's on your mind?",
+      'Curious about something?',
+    ];
+
+    /* ─── State ─────────────────────────────────────────────── */
+    let history = []; // [{ role, parts: [{ text }] }]
+    let isThinking = false;
+    let placeholderIndex = 0;
+    let placeholderTimer = null;
+
+    /* ─── DOM Refs ──────────────────────────────────────────── */
+    const chatBody  = document.getElementById('chat-body');
+    const typingInd = document.getElementById('typing-indicator');
+    const userInput = document.getElementById('user-input');
+    const sendBtn   = document.getElementById('send-btn');
+
+    /* ═══════════════════════════════════════════════════════
+       UTILITY: TIMESTAMPS
+    ═══════════════════════════════════════════════════════ */
+    function relativeTime(date) {
+      const secs = Math.floor((Date.now() - date) / 1000);
+      if (secs < 10)  return 'Just now';
+      if (secs < 60)  return `${secs}s ago`;
+      const mins = Math.floor(secs / 60);
+      if (mins < 60)  return mins === 1 ? '1 min ago' : `${mins} min ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24)   return hrs === 1 ? '1 hr ago' : `${hrs} hrs ago`;
+      return date.toLocaleDateString();
+    }
+
+    /* Keep timestamps live for visible messages */
+    const liveTimestamps = []; // { el, date }
+    function startTimestampUpdater() {
+      setInterval(() => {
+        liveTimestamps.forEach(({ el, date }) => {
+          el.textContent = relativeTime(date);
+        });
+      }, 30_000);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       UTILITY: SCROLL
+    ═══════════════════════════════════════════════════════ */
+    function scrollBottom() {
+      chatBody.scrollTo({ top: chatBody.scrollHeight, behavior: 'smooth' });
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       MESSAGE RENDERING
+    ═══════════════════════════════════════════════════════ */
+    function createBubble(role, text = '', isError = false) {
+      const now = new Date();
+      const wrap = document.createElement('div');
+      wrap.className = `msg-wrap ${role}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `bubble${isError ? ' error-bubble' : ''}`;
+      bubble.textContent = text;
+
+      const ts = document.createElement('span');
+      ts.className = 'timestamp';
+      ts.textContent = relativeTime(now);
+      liveTimestamps.push({ el: ts, date: now });
+
+      wrap.appendChild(bubble);
+      wrap.appendChild(ts);
+
+      /* Insert before the typing indicator */
+      chatBody.insertBefore(wrap, typingInd);
+      scrollBottom();
+
+      return bubble;
+    }
+
+    /* Typewriter effect — returns a promise that resolves when done */
+    function typewrite(bubbleEl, fullText) {
+      return new Promise(resolve => {
+        bubbleEl.textContent = '';
+        let i = 0;
+        const tick = () => {
+          if (i < fullText.length) {
+            bubbleEl.textContent += fullText[i++];
+            scrollBottom();
+            setTimeout(tick, TYPEWRITER_INTERVAL);
+          } else {
+            /* Render Markdown after typewriter finishes */
+            const htmlContent = marked.parse(fullText);
+            bubbleEl.innerHTML = htmlContent;
+            
+            /* Apply highlighting */
+            bubbleEl.querySelectorAll('pre code').forEach((block) => {
+              hljs.highlightElement(block);
+            });
+            
+            scrollBottom();
+            resolve();
+          }
+        };
+        tick();
+      });
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       TYPING INDICATOR
+    ═══════════════════════════════════════════════════════ */
+    function showTyping() {
+      typingInd.classList.add('visible');
+      chatBody.appendChild(typingInd); // keep it last
+      scrollBottom();
+    }
+    function hideTyping() {
+      typingInd.classList.remove('visible');
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       GEMINI API CALL
+    ═══════════════════════════════════════════════════════ */
+    async function callGemini(useSystemInstruction = true) {
+      const payload = {
+        contents: history,
+        generationConfig: {
+          temperature: 0.85,
+          maxOutputTokens: 1024,
+        },
+      };
+
+      if (useSystemInstruction) {
+        payload.system_instruction = { parts: [{ text: SYSTEM_INSTRUCTION }] };
+      }
+
+      const response = await fetch(`${API_URL}?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const msg = err?.error?.message || err?.message || `HTTP ${response.status}`;
+        
+        // If system_instruction was the problem, retry without it once
+        if (useSystemInstruction && (msg.includes('system_instruction') || response.status === 400)) {
+          console.warn('Retrying without system_instruction...');
+          return callGemini(false);
+        }
+        
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Empty response from Gemini.');
+      return text.trim();
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SEND MESSAGE
+    ═══════════════════════════════════════════════════════ */
+    async function sendMessage() {
+      const raw = userInput.value;
+      const text = raw.trim();
+      if (!text || isThinking) return;
+
+      isThinking = true;
+      setInputState(false);
+      userInput.value = '';
+      autoResize();
+
+      /* Append user bubble */
+      createBubble('user', text);
+
+      /* Update history */
+      history.push({ role: 'user', parts: [{ text }] });
+
+      /* Show thinking */
+      showTyping();
+
+      try {
+        const reply = await callGemini();
+        hideTyping();
+
+        /* Append bot bubble with typewriter */
+        history.push({ role: 'model', parts: [{ text: reply }] });
+        const botBubble = createBubble('bot');
+        await typewrite(botBubble, reply);
+
+      } catch (err) {
+        hideTyping();
+        const displayMsg = `Hmm, I had trouble thinking that through.\n\n**Error:** ${err.message}`;
+        createBubble('bot', displayMsg, true);
+        console.error('Chat Error:', err);
+        /* Remove failed user message from history so next attempt is clean */
+        history.pop();
+      } finally {
+        isThinking = false;
+        setInputState(true);
+        userInput.focus();
+      }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       INPUT STATE
+    ═══════════════════════════════════════════════════════ */
+    function setInputState(enabled) {
+      userInput.disabled = !enabled;
+      sendBtn.disabled = enabled ? userInput.value.trim() === '' : true;
+    }
+
+    function autoResize() {
+      userInput.style.height = 'auto';
+      userInput.style.height = Math.min(userInput.scrollHeight, 96) + 'px';
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       PLACEHOLDER CYCLING
+    ═══════════════════════════════════════════════════════ */
+    function startPlaceholderCycle() {
+      placeholderTimer = setInterval(() => {
+        placeholderIndex = (placeholderIndex + 1) % PLACEHOLDER_PHRASES.length;
+        /* Fade out then update */
+        userInput.style.opacity = '0';
+        setTimeout(() => {
+          userInput.placeholder = PLACEHOLDER_PHRASES[placeholderIndex];
+          userInput.style.opacity = '1';
+        }, 300);
+      }, 4000);
+    }
+    function stopPlaceholderCycle() {
+      clearInterval(placeholderTimer);
+      userInput.style.opacity = '1';
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       BOOT — fire onboarding immediately on page load
+    ═══════════════════════════════════════════════════════ */
+    function boot() {
+      userInput.focus();
+      startPlaceholderCycle();
+      startTimestampUpdater();
+
+      /* Onboarding message */
+      setTimeout(() => {
+        showTyping();
+        setTimeout(async () => {
+          hideTyping();
+          const greeting = "Hey! I'm Aura. What's on your mind today?";
+          history.push({ role: 'model', parts: [{ text: greeting }] });
+          const botBubble = createBubble('bot');
+          await typewrite(botBubble, greeting);
+        }, 900);
+      }, ONBOARDING_DELAY);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       INPUT EVENTS
+    ═══════════════════════════════════════════════════════ */
+    userInput.addEventListener('input', () => {
+      autoResize();
+      sendBtn.disabled = userInput.value.trim() === '';
+      if (userInput.value.trim()) {
+        stopPlaceholderCycle();
+      } else {
+        startPlaceholderCycle();
+      }
+    });
+
+    userInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!sendBtn.disabled) sendMessage();
+      }
+    });
+
+    userInput.addEventListener('focus', () => stopPlaceholderCycle());
+    userInput.addEventListener('blur', () => {
+      if (!userInput.value.trim()) startPlaceholderCycle();
+    });
+
+    sendBtn.addEventListener('click', () => sendMessage());
+
+    /* Add CSS transition for placeholder fade */
+    const style = document.createElement('style');
+    style.textContent = `#user-input { transition: opacity 0.3s ease; }`;
+    document.head.appendChild(style);
+
+    /* Kick off */
+    boot();
+
+  })();
+  </script>
+</body>
+</html>
